@@ -1,16 +1,35 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Bookmark, BookmarkCheck } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
+import { getTranslation } from '../data/glossary.js'
+import { useT } from '../i18n/useT.js'
 
-export default function TappableWord({ word, hebrew, isActive, onTap, onDismiss }) {
-  const ref = useRef(null)
-  const { hasWord, addWord, removeWord } = useApp()
+const isHoverDevice = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia &&
+  window.matchMedia('(hover: hover) and (pointer: fine)').matches
+
+export default function TappableWord({
+  word,
+  isActive,
+  onShow,
+  onScheduleHide,
+  onCancelHide,
+  onToggleClick,
+  onDismissNow,
+}) {
+  const wrapperRef = useRef(null)
+  const hoverable = useMemo(isHoverDevice, [])
+  const t = useT()
+
+  const { hasWord, addWord, removeWord, targetLang } = useApp()
+  const translation = getTranslation(word, targetLang)
   const saved = hasWord(word)
 
   useEffect(() => {
     if (!isActive) return
     const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) onDismiss()
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) onDismissNow()
     }
     document.addEventListener('mousedown', handler)
     document.addEventListener('touchstart', handler)
@@ -18,21 +37,28 @@ export default function TappableWord({ word, hebrew, isActive, onTap, onDismiss 
       document.removeEventListener('mousedown', handler)
       document.removeEventListener('touchstart', handler)
     }
-  }, [isActive, onDismiss])
+  }, [isActive, onDismissNow])
+
+  const hoverProps = hoverable
+    ? {
+        onMouseEnter: () => { onCancelHide(); onShow() },
+        onMouseLeave: () => onScheduleHide(),
+      }
+    : {}
 
   return (
-    <span ref={ref} className="relative inline-block">
+    <span ref={wrapperRef} className="relative inline-block" {...hoverProps}>
       <button
         type="button"
         onClick={(e) => {
           e.stopPropagation()
-          isActive ? onDismiss() : onTap()
+          onToggleClick()
         }}
         className={
           'inline transition-colors ' +
           (isActive
             ? 'text-[#0A5C38] underline decoration-[#0A5C38] decoration-2 underline-offset-[5px]'
-            : 'border-b border-dashed border-neutral-300 hover:border-[#0A5C38]/60')
+            : 'border-b border-dashed border-neutral-300 hover:border-[#0A5C38]/60 cursor-pointer')
         }
       >
         {word}
@@ -42,27 +68,34 @@ export default function TappableWord({ word, hebrew, isActive, onTap, onDismiss 
         <span
           role="tooltip"
           className="anim-tooltip-in absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] z-40"
-          style={{ pointerEvents: 'auto' }}
+          {...hoverProps}
         >
           <span className="block bg-neutral-900 text-white rounded-2xl px-3.5 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.18)] whitespace-nowrap">
-            <span className="block text-[15px] font-hebrew text-right leading-tight" dir="rtl">
-              {hebrew}
+            <span className="block text-[14px] leading-tight font-medium">
+              <span className="text-neutral-300">{word}</span>
+              <span className="text-neutral-500 mx-1.5">=</span>
+              <span>{translation || '—'}</span>
+              <span className="ms-2 inline-block text-[10px] font-bold tracking-wide bg-white/15 px-1.5 py-0.5 rounded">
+                {targetLang.toUpperCase()}
+              </span>
             </span>
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation()
-                saved ? removeWord(word) : addWord({ spanish: word, hebrew })
+                saved
+                  ? removeWord(word)
+                  : addWord({ spanish: word, translation, lang: targetLang })
               }}
               className="mt-1.5 flex items-center gap-1 text-[11px] text-neutral-300 hover:text-white"
             >
               {saved ? (
                 <>
-                  <BookmarkCheck size={12} strokeWidth={2.5} /> Guardada
+                  <BookmarkCheck size={12} strokeWidth={2.5} /> {t.saved}
                 </>
               ) : (
                 <>
-                  <Bookmark size={12} strokeWidth={2.5} /> Guardar
+                  <Bookmark size={12} strokeWidth={2.5} /> {t.save}
                 </>
               )}
             </button>

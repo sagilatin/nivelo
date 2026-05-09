@@ -1,4 +1,9 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import {
+  COUNTRY_VALUES,
+  LANG_BY_VALUE,
+  detectBrowserLang,
+} from '../data/constants.js'
 
 const AppContext = createContext(null)
 
@@ -11,14 +16,35 @@ const read = (key, fallback) => {
   }
 }
 
+const normalizeSources = (v) => {
+  if (Array.isArray(v)) {
+    const valid = v.filter((s) => COUNTRY_VALUES.includes(s))
+    return valid.length ? valid : COUNTRY_VALUES
+  }
+  return COUNTRY_VALUES
+}
+const normalizeLang = (v) => (LANG_BY_VALUE[v] ? v : 'en')
+const normalizeUiLang = (v) => (LANG_BY_VALUE[v] ? v : detectBrowserLang())
+
 export function AppProvider({ children }) {
   const [level, setLevel] = useState(() => read('nivelo:level', 'B1'))
-  const [source, setSource] = useState(() => read('nivelo:source', 'Todas las fuentes'))
+  const [sources, setSources] = useState(() => normalizeSources(read('nivelo:sources', null)))
+  const [targetLang, setTargetLang] = useState(() => normalizeLang(read('nivelo:targetLang', 'en')))
+  const [uiLang, setUiLang] = useState(() => normalizeUiLang(read('nivelo:uiLang', null)))
   const [vocabulary, setVocabulary] = useState(() => read('nivelo:vocab', []))
 
   useEffect(() => { localStorage.setItem('nivelo:level', JSON.stringify(level)) }, [level])
-  useEffect(() => { localStorage.setItem('nivelo:source', JSON.stringify(source)) }, [source])
+  useEffect(() => { localStorage.setItem('nivelo:sources', JSON.stringify(sources)) }, [sources])
+  useEffect(() => { localStorage.setItem('nivelo:targetLang', JSON.stringify(targetLang)) }, [targetLang])
+  useEffect(() => { localStorage.setItem('nivelo:uiLang', JSON.stringify(uiLang)) }, [uiLang])
   useEffect(() => { localStorage.setItem('nivelo:vocab', JSON.stringify(vocabulary)) }, [vocabulary])
+
+  // Reflect interface language + direction at the document root.
+  useEffect(() => {
+    const dir = LANG_BY_VALUE[uiLang]?.dir || 'ltr'
+    document.documentElement.dir = dir
+    document.documentElement.lang = uiLang
+  }, [uiLang])
 
   const addWord = (word) => {
     setVocabulary((prev) =>
@@ -37,8 +63,12 @@ export function AppProvider({ children }) {
       value={{
         level,
         setLevel,
-        source,
-        setSource,
+        sources,
+        setSources,
+        targetLang,
+        setTargetLang,
+        uiLang,
+        setUiLang,
         vocabulary,
         addWord,
         removeWord,

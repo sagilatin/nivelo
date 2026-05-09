@@ -1,19 +1,20 @@
 import { Link, useLocation } from 'react-router-dom'
 import { Home, BookOpen, Settings } from 'lucide-react'
-
-const TABS = [
-  { to: '/', label: 'Inicio', icon: Home, match: (p) => p === '/' || p.startsWith('/article') },
-  { to: '/palabras', label: 'Palabras', icon: BookOpen, match: (p) => p.startsWith('/palabras') },
-  { to: '/ajustes', label: 'Ajustes', icon: Settings, match: (p) => p.startsWith('/ajustes') },
-]
+import { useT } from '../i18n/useT.js'
 
 export default function TabBar() {
+  const t = useT()
   const { pathname } = useLocation()
+  const tabs = [
+    { to: '/', label: t.home, icon: Home, match: (p) => p === '/' || p.startsWith('/article') },
+    { to: '/palabras', label: t.myWords, icon: BookOpen, match: (p) => p.startsWith('/palabras') },
+    { to: '/ajustes', label: t.settings, icon: Settings, match: (p) => p.startsWith('/ajustes') },
+  ]
   return (
     <nav className="absolute bottom-0 left-0 right-0 z-20">
       <div className="bg-white/90 backdrop-blur-md border-t border-neutral-200/80 px-2 pt-1.5 pb-3">
         <ul className="flex items-stretch justify-around">
-          {TABS.map(({ to, label, icon: Icon, match }) => {
+          {tabs.map(({ to, label, icon: Icon, match }) => {
             const active = match(pathname)
             return (
               <li key={to} className="flex-1">
