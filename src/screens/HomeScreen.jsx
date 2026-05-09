@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import TopBar from '../components/TopBar.jsx'
 import NewsCard from '../components/NewsCard.jsx'
 import TabBar from '../components/TabBar.jsx'
-import { articles } from '../data/articles.js'
+import { useArticles } from '../data/useArticles.js'
 import { useApp } from '../context/AppContext.jsx'
 import { useT } from '../i18n/useT.js'
 import { COUNTRY_VALUES } from '../data/constants.js'
@@ -10,12 +10,13 @@ import { COUNTRY_VALUES } from '../data/constants.js'
 export default function HomeScreen() {
   const { sources } = useApp()
   const t = useT()
+  const { articles, source: dataSource } = useArticles()
 
   const filtered = useMemo(() => {
     const allOn = COUNTRY_VALUES.every((v) => sources.includes(v))
     if (allOn) return articles
     return articles.filter((a) => sources.includes(a.country))
-  }, [sources])
+  }, [sources, articles])
 
   return (
     <div className="min-h-screen pb-28">

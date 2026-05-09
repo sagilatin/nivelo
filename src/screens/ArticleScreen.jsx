@@ -5,7 +5,7 @@ import LevelPills from '../components/LevelPills.jsx'
 import QuizModal from '../components/QuizModal.jsx'
 import TappableWord from '../components/TappableWord.jsx'
 import Image from '../components/Image.jsx'
-import { getArticleById, getArticleContent } from '../data/articles.js'
+import { useArticles, findArticleById, getArticleContent } from '../data/useArticles.js'
 import { getQuizForArticle } from '../data/quizzes.js'
 import { useApp } from '../context/AppContext.jsx'
 import { useT } from '../i18n/useT.js'
@@ -37,8 +37,9 @@ function RichParagraph({ segments, paraIndex, activeKey, handlers }) {
 export default function ArticleScreen() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const article = getArticleById(id)
-  const quiz = getQuizForArticle(id)
+  const { articles } = useArticles()
+  const article = findArticleById(articles, id)
+  const quiz = article.quiz || getQuizForArticle(id)
   const t = useT()
   const { vocabulary, addWord, removeWord, level } = useApp()
   const { headline, body } = getArticleContent(article, level)

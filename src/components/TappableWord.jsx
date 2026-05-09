@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Bookmark, BookmarkCheck } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 import { getTranslation } from '../data/glossary.js'
@@ -23,8 +23,32 @@ export default function TappableWord({
   const t = useT()
 
   const { hasWord, addWord, removeWord, targetLang } = useApp()
-  const translation = getTranslation(word, targetLang)
+  const localTranslation = getTranslation(word, targetLang)
+  const [remoteTranslation, setRemoteTranslation] = useState('')
+  const [loadingTranslation, setLoadingTranslation] = useState(false)
+  const translation = localTranslation || remoteTranslation
   const saved = hasWord(word)
+
+  // When a tooltip opens for a word the local glossary doesn't know, ask the
+  // /api/translate endpoint (DeepL/Gemini behind the scenes, cached in
+  // Supabase). Stays a noop if the local glossary already has the word or if
+  // /api/translate isn't deployed yet (returns blank, tooltip shows "—").
+  useEffect(() => {
+    if (!isActive || localTranslation || remoteTranslation) return
+    let cancelled = false
+    setLoadingTranslation(true)
+    fetch(`/api/translate?word=${encodeURIComponent(word)}&lang=${encodeURIComponent(targetLang)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled) return
+        if (data?.translation) setRemoteTranslation(data.translation)
+        setLoadingTranslation(false)
+      })
+      .catch(() => {
+        if (!cancelled) setLoadingTranslation(false)
+      })
+    return () => { cancelled = true }
+  }, [isActive, word, targetLang, localTranslation, remoteTranslation])
 
   useEffect(() => {
     if (!isActive) return
@@ -74,7 +98,7 @@ export default function TappableWord({
             <span className="block text-[14px] leading-tight font-medium">
               <span className="text-neutral-300">{word}</span>
               <span className="text-neutral-500 mx-1.5">=</span>
-              <span>{translation || '—'}</span>
+              <span>{translation || (loadingTranslation ? '…' : '—')}</span>
               <span className="ms-2 inline-block text-[10px] font-bold tracking-wide bg-white/15 px-1.5 py-0.5 rounded">
                 {targetLang.toUpperCase()}
               </span>
