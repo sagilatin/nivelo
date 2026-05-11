@@ -11,30 +11,42 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-// DeepL supports these among our 6 target languages. Hebrew is missing.
-const DEEPL_LANG_MAP = { en: 'EN-US', de: 'DE', fr: 'FR', it: 'IT', ja: 'JA' }
-const VALID_LANGS = new Set(['en', 'he', 'de', 'fr', 'it', 'ja'])
+// DeepL supports these among our 6 interface languages. Hebrew is missing.
+const DEEPL_LANG_MAP = { en: 'EN-US', de: 'DE', fr: 'FR', it: 'IT', ja: 'JA', es: 'ES' }
+const VALID_TARGETS = new Set(['en', 'he', 'de', 'fr', 'it', 'ja'])
+const VALID_SOURCES = new Set(['es', 'fr', 'de', 'it', 'ja', 'en'])
+const DEEPL_SOURCE_MAP = { es: 'ES', fr: 'FR', de: 'DE', it: 'IT', ja: 'JA', en: 'EN' }
+const LANG_NAME = { es: 'Spanish', fr: 'French', de: 'German', it: 'Italian', ja: 'Japanese', en: 'English', he: 'Hebrew' }
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate')
 
   const word = String(req.query.word || '').trim()
   const lang = String(req.query.lang || '').toLowerCase()
+  const source = String(req.query.source || 'es').toLowerCase()
 
-  if (!word || !VALID_LANGS.has(lang)) {
-    return res.status(400).json({ error: 'Provide ?word=<spanish>&lang=<en|he|de|fr|it|ja>' })
+  if (!word || !VALID_TARGETS.has(lang) || !VALID_SOURCES.has(source)) {
+    return res.status(400).json({
+      error: 'Provide ?word=<word>&lang=<en|he|de|fr|it|ja>&source=<es|fr|de|it|ja|en>',
+    })
+  }
+  if (source === lang) {
+    return res.status(200).json({ word, lang, translation: word, source: 'identity' })
   }
 
+  // Read the URL from either env name — Vercel deploys typically only set
+  // VITE_SUPABASE_URL because the same value is used client-side.
   const supabase = createClient(
-    process.env.SUPABASE_URL,
+    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
   )
 
-  // 1) cache lookup
+  // 1) cache lookup — keyed on (source word, source lang, target lang)
   const cached = await supabase
     .from('word_translations')
     .select('translation')
-    .eq('spanish', word.toLowerCase())
+    .eq('word', word.toLowerCase())
+    .eq('source_lang', source)
     .eq('lang', lang)
     .maybeSingle()
   if (cached.data) {
@@ -43,14 +55,14 @@ export default async function handler(req, res) {
 
   // 2/3) translate
   let translation = ''
-  let source = ''
+  let provider = ''
   try {
-    if (DEEPL_LANG_MAP[lang]) {
-      translation = await deepLTranslate(word, lang)
-      source = 'deepl'
+    if (DEEPL_LANG_MAP[lang] && DEEPL_SOURCE_MAP[source]) {
+      translation = await deepLTranslate(word, source, lang)
+      provider = 'deepl'
     } else {
-      translation = await geminiTranslateOne(word, lang)
-      source = 'gemini'
+      translation = await geminiTranslateOne(word, source, lang)
+      provider = 'gemini'
     }
   } catch (e) {
     return res.status(502).json({ error: 'translation provider failed', detail: e.message })
@@ -63,12 +75,18 @@ export default async function handler(req, res) {
   // 4) cache and return
   await supabase
     .from('word_translations')
-    .upsert({ spanish: word.toLowerCase(), lang, translation, source })
+    .upsert({
+      word: word.toLowerCase(),
+      source_lang: source,
+      lang,
+      translation,
+      provider,
+    })
 
-  return res.status(200).json({ word, lang, translation, source })
+  return res.status(200).json({ word, lang, translation, source: provider })
 }
 
-async function deepLTranslate(text, lang) {
+async function deepLTranslate(text, source, lang) {
   const r = await fetch('https://api-free.deepl.com/v2/translate', {
     method: 'POST',
     headers: {
@@ -77,7 +95,7 @@ async function deepLTranslate(text, lang) {
     },
     body: new URLSearchParams({
       text,
-      source_lang: 'ES',
+      source_lang: DEEPL_SOURCE_MAP[source],
       target_lang: DEEPL_LANG_MAP[lang],
     }),
   })
@@ -86,9 +104,10 @@ async function deepLTranslate(text, lang) {
   return data.translations?.[0]?.text || ''
 }
 
-async function geminiTranslateOne(text, lang) {
-  const langName = { he: 'Hebrew' }[lang] || lang
-  const prompt = `Translate the Spanish word "${text}" into ${langName}. Return ONLY the single translated word, no quotes or commentary.`
+async function geminiTranslateOne(text, source, lang) {
+  const srcName = LANG_NAME[source] || source
+  const tgtName = LANG_NAME[lang] || lang
+  const prompt = `Translate the ${srcName} word "${text}" into ${tgtName}. Return ONLY the single translated word, no quotes or commentary.`
   const r = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
     {

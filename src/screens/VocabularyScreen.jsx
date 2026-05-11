@@ -8,9 +8,10 @@ import { getTranslation } from '../data/glossary.js'
 function FlashCard({ entry, currentTargetLang }) {
   const [flipped, setFlipped] = useState(false)
   // Prefer the translation saved at the time of saving; fall back to the
-  // current target language so freshly-changed languages still work.
+  // current interface language so freshly-changed languages still work.
   const lang = entry.lang || currentTargetLang
   const translation = entry.translation || getTranslation(entry.spanish, lang) || '—'
+  const sourceLang = entry.sourceLang || 'es'
 
   return (
     <button
@@ -25,14 +26,14 @@ function FlashCard({ entry, currentTargetLang }) {
         </span>
       )}
       <span className="text-[10.5px] tracking-wide font-bold text-neutral-400 uppercase shrink-0 bg-neutral-100 px-2 py-0.5 rounded">
-        {flipped ? lang.toUpperCase() : 'ES'}
+        {flipped ? lang.toUpperCase() : sourceLang.toUpperCase()}
       </span>
     </button>
   )
 }
 
 export default function VocabularyScreen() {
-  const { vocabulary, clearVocabulary, targetLang } = useApp()
+  const { vocabulary, clearVocabulary, uiLang } = useApp()
   const t = useT()
   const words = vocabulary.filter((w) => !w.spanish.startsWith('__article:'))
 
@@ -71,7 +72,7 @@ export default function VocabularyScreen() {
           </div>
         ) : (
           words.map((w) => (
-            <FlashCard key={w.spanish} entry={w} currentTargetLang={targetLang} />
+            <FlashCard key={w.spanish} entry={w} currentTargetLang={uiLang} />
           ))
         )}
       </div>

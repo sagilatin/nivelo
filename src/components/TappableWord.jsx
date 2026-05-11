@@ -11,6 +11,7 @@ const isHoverDevice = () =>
 
 export default function TappableWord({
   word,
+  sourceLang = 'es',
   isActive,
   onShow,
   onScheduleHide,
@@ -22,8 +23,11 @@ export default function TappableWord({
   const hoverable = useMemo(isHoverDevice, [])
   const t = useT()
 
-  const { hasWord, addWord, removeWord, targetLang } = useApp()
-  const localTranslation = getTranslation(word, targetLang)
+  // Tooltip translates the tapped word INTO the user's interface language
+  // (per spec). For source lang we use whatever the article body is written
+  // in (defaults to Spanish for the seed data).
+  const { hasWord, addWord, removeWord, uiLang } = useApp()
+  const localTranslation = getTranslation(word, uiLang)
   const [remoteTranslation, setRemoteTranslation] = useState('')
   const [loadingTranslation, setLoadingTranslation] = useState(false)
   const translation = localTranslation || remoteTranslation
@@ -35,9 +39,14 @@ export default function TappableWord({
   // /api/translate isn't deployed yet (returns blank, tooltip shows "—").
   useEffect(() => {
     if (!isActive || localTranslation || remoteTranslation) return
+    if (sourceLang === uiLang) return
     let cancelled = false
     setLoadingTranslation(true)
-    fetch(`/api/translate?word=${encodeURIComponent(word)}&lang=${encodeURIComponent(targetLang)}`)
+    fetch(
+      `/api/translate?word=${encodeURIComponent(word)}` +
+        `&lang=${encodeURIComponent(uiLang)}` +
+        `&source=${encodeURIComponent(sourceLang)}`,
+    )
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (cancelled) return
@@ -48,7 +57,7 @@ export default function TappableWord({
         if (!cancelled) setLoadingTranslation(false)
       })
     return () => { cancelled = true }
-  }, [isActive, word, targetLang, localTranslation, remoteTranslation])
+  }, [isActive, word, uiLang, sourceLang, localTranslation, remoteTranslation])
 
   useEffect(() => {
     if (!isActive) return
@@ -91,7 +100,7 @@ export default function TappableWord({
       {isActive && (
         <span
           role="tooltip"
-          className="anim-tooltip-in absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] z-40"
+          className="anim-tooltip-in absolute left-1/2 -translate-x-1/2 bottom-[calc(100%+10px)] z-[9999]"
           {...hoverProps}
         >
           <span className="block bg-neutral-900 text-white rounded-2xl px-3.5 py-2.5 shadow-[0_8px_24px_rgba(0,0,0,0.18)] whitespace-nowrap">
@@ -100,7 +109,7 @@ export default function TappableWord({
               <span className="text-neutral-500 mx-1.5">=</span>
               <span>{translation || (loadingTranslation ? '…' : '—')}</span>
               <span className="ms-2 inline-block text-[10px] font-bold tracking-wide bg-white/15 px-1.5 py-0.5 rounded">
-                {targetLang.toUpperCase()}
+                {uiLang.toUpperCase()}
               </span>
             </span>
             <button
@@ -109,7 +118,7 @@ export default function TappableWord({
                 e.stopPropagation()
                 saved
                   ? removeWord(word)
-                  : addWord({ spanish: word, translation, lang: targetLang })
+                  : addWord({ spanish: word, sourceLang, translation, lang: uiLang })
               }}
               className="mt-1.5 flex items-center gap-1 text-[11px] text-neutral-300 hover:text-white"
             >

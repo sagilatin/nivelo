@@ -73,7 +73,7 @@ export default function MultiSelectDropdown({
       {open && (
         <div
           className={
-            'absolute top-full mt-2 z-40 anim-pop-in ' +
+            'absolute top-full mt-2 z-[9999] anim-pop-in ' +
             (align === 'right' ? 'right-0' : 'left-0')
           }
           style={{ transformOrigin: align === 'right' ? 'top right' : 'top left' }}

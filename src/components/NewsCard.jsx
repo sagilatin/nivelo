@@ -1,18 +1,18 @@
 import { Link } from 'react-router-dom'
-import { ArrowRight, ExternalLink } from 'lucide-react'
+import { ArrowRight, ExternalLink, Loader2 } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
-import { getArticleContent } from '../data/articles.js'
+import { getArticleContent, getArticleSummary } from '../data/useArticles.js'
 import { useT } from '../i18n/useT.js'
 
 export default function NewsCard({ article }) {
   const { level, targetLang } = useApp()
   const t = useT()
-  const { headline } = getArticleContent(article, level)
-  const summaryTranslation = article.summaryTranslations?.[targetLang]
+  const content = getArticleContent(article, level, targetLang)
+  const summary = getArticleSummary(article, targetLang)
+  const unavailable = !content
 
   return (
     <article className="bg-white rounded-[20px] overflow-hidden border border-neutral-100 shadow-[0_1px_2px_rgba(0,0,0,0.03),0_4px_16px_rgba(0,0,0,0.03)] flex flex-col">
-      {/* Hero image */}
       <Link to={`/article/${article.id}`} className="block relative">
         <div className="relative h-[160px] bg-neutral-100">
           <img
@@ -32,7 +32,6 @@ export default function NewsCard({ article }) {
       </Link>
 
       <div className="p-5 flex flex-col flex-1">
-        {/* Source · Lang · Category · Read time */}
         <div className="flex items-center gap-1.5 text-[10.5px] tracking-[0.06em] text-neutral-500 font-semibold mb-2.5 flex-wrap">
           <span className="text-[15px] leading-none -mt-px">{article.flag}</span>
           <a
@@ -51,22 +50,30 @@ export default function NewsCard({ article }) {
           <span>{article.minutes} MIN</span>
         </div>
 
-        <Link to={`/article/${article.id}`} className="block">
-          <h2 className="text-[17px] font-semibold leading-snug tracking-[-0.01em] text-neutral-900">
-            {headline}
-          </h2>
-          <p className="text-[14px] text-neutral-600 leading-snug mt-2">
-            {article.summary}
-          </p>
-          {summaryTranslation && (
-            <p className="text-[12.5px] text-neutral-400 italic leading-snug mt-1.5">
-              {summaryTranslation}
-              <span className="not-italic font-semibold ms-1.5 text-neutral-500">
-                · {targetLang.toUpperCase()}
-              </span>
-            </p>
-          )}
-        </Link>
+        {unavailable ? (
+          <div className="bg-neutral-50 border border-dashed border-neutral-200 rounded-xl p-4 flex items-start gap-3">
+            <Loader2 size={16} className="animate-spin text-neutral-400 mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[13.5px] font-semibold text-neutral-700">
+                {t.contentLoadingTitle}
+              </p>
+              <p className="text-[12px] text-neutral-500 mt-1 leading-snug">
+                {t.contentLoadingBody}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <Link to={`/article/${article.id}`} className="block">
+            <h2 className="text-[17px] font-semibold leading-snug tracking-[-0.01em] text-neutral-900">
+              {content.headline}
+            </h2>
+            {summary && (
+              <p className="text-[14px] text-neutral-600 leading-snug mt-2">
+                {summary}
+              </p>
+            )}
+          </Link>
+        )}
 
         <div className="mt-4 flex items-center justify-between gap-3">
           <Link

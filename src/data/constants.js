@@ -15,7 +15,7 @@ export const SOURCES = [
 ]
 export const COUNTRY_VALUES = SOURCES.filter((s) => s.value !== 'all').map((s) => s.value)
 
-// Languages used both for word-tap translation and for the interface.
+// Interface language — controls UI strings + page direction.
 // `dir: 'rtl'` triggers a full right-to-left layout.
 export const LANGUAGES = [
   { value: 'en', label: 'English',  flag: '🇬🇧', dir: 'ltr' },
@@ -26,8 +26,24 @@ export const LANGUAGES = [
   { value: 'ja', label: '日本語',    flag: '🇯🇵', dir: 'ltr' },
 ]
 
+// Practice language — the language the user is LEARNING.
+// Article body, headlines, summaries, and quizzes are produced in this
+// language. Order and default match the product brief: Spanish first.
+export const PRACTICE_LANGUAGES = [
+  { value: 'es', label: 'Spanish',  nameEn: 'Spanish',  flag: '🇪🇸' },
+  { value: 'fr', label: 'French',   nameEn: 'French',   flag: '🇫🇷' },
+  { value: 'de', label: 'German',   nameEn: 'German',   flag: '🇩🇪' },
+  { value: 'it', label: 'Italian',  nameEn: 'Italian',  flag: '🇮🇹' },
+  { value: 'ja', label: 'Japanese', nameEn: 'Japanese', flag: '🇯🇵' },
+  { value: 'en', label: 'English',  nameEn: 'English',  flag: '🇬🇧' },
+]
+export const DEFAULT_PRACTICE_LANG = 'es'
+
 export const SOURCE_BY_VALUE = Object.fromEntries(SOURCES.map((s) => [s.value, s]))
 export const LANG_BY_VALUE = Object.fromEntries(LANGUAGES.map((l) => [l.value, l]))
+export const PRACTICE_LANG_BY_VALUE = Object.fromEntries(
+  PRACTICE_LANGUAGES.map((l) => [l.value, l]),
+)
 
 // Pick the best UI language match from the browser's preferred languages,
 // defaulting to English. Called once on first load.

@@ -1,14 +1,18 @@
+import { Globe } from 'lucide-react'
 import Dropdown from './Dropdown.jsx'
 import MultiSelectDropdown from './MultiSelectDropdown.jsx'
+import Logo from './Logo.jsx'
 import { useApp } from '../context/AppContext.jsx'
 import { useT } from '../i18n/useT.js'
 import {
   LEVELS,
   SOURCES,
   LANGUAGES,
+  PRACTICE_LANGUAGES,
   COUNTRY_VALUES,
   SOURCE_BY_VALUE,
   LANG_BY_VALUE,
+  PRACTICE_LANG_BY_VALUE,
 } from '../data/constants.js'
 
 const LEVEL_OPTIONS = LEVELS.map((v) => ({ value: v, label: v }))
@@ -40,22 +44,26 @@ export default function TopBar() {
     </span>
   )
 
-  const langOpt = LANG_BY_VALUE[targetLang] || LANG_BY_VALUE.en
+  const langOpt = PRACTICE_LANG_BY_VALUE[targetLang] || PRACTICE_LANGUAGES[0]
   const langTrigger = (
-    <span className="flex items-center gap-1 text-[12px] font-semibold tracking-wide">
-      <span className="text-neutral-400">→</span>
-      <span>{targetLang.toUpperCase()}</span>
+    <span className="flex items-center gap-1 text-[15px] leading-none">
+      <span>{langOpt.flag}</span>
     </span>
   )
 
   const uiLangOpt = LANG_BY_VALUE[uiLang] || LANG_BY_VALUE.en
-  const uiTrigger = <span className="text-[15px] leading-none">{uiLangOpt.flag}</span>
+  const uiTrigger = (
+    <span className="flex items-center gap-1">
+      <Globe size={14} strokeWidth={2.2} className="text-neutral-700" />
+      <span className="text-[15px] leading-none">{uiLangOpt.flag}</span>
+    </span>
+  )
 
   return (
     <header className="sticky top-0 z-30 bg-[#FAFAF8]/85 backdrop-blur-md px-3 pt-4 pb-3 flex items-center gap-1.5">
-      <span className="text-[22px] font-semibold tracking-[-0.02em] lowercase text-neutral-900 mr-auto pl-1.5">
-        nivelo
-      </span>
+      <div className="mr-auto pl-1.5">
+        <Logo size={22} />
+      </div>
 
       <Dropdown
         ariaLabel={t.level}
@@ -76,20 +84,20 @@ export default function TopBar() {
       />
 
       <Dropdown
+        ariaLabel={t.translation}
+        triggerContent={langTrigger}
+        options={PRACTICE_LANGUAGES}
+        selected={targetLang}
+        onSelect={setTargetLang}
+        align="right"
+      />
+
+      <Dropdown
         ariaLabel={t.interfaceLang}
         triggerContent={uiTrigger}
         options={LANGUAGES}
         selected={uiLang}
         onSelect={setUiLang}
-        align="right"
-      />
-
-      <Dropdown
-        ariaLabel={t.translation}
-        triggerContent={langTrigger}
-        options={LANGUAGES}
-        selected={targetLang}
-        onSelect={setTargetLang}
         align="right"
       />
     </header>

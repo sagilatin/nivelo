@@ -5,14 +5,16 @@
 //   2. Take the 5 most recent items per country.
 //   3. For each item not already in `articles`:
 //      - Insert raw row.
-//      - Ask Gemini for the full Spanish rewrite (A1–C2 headlines + bodies +
-//        tappable-word picks + 6-language summary translations).
-//      - Ask Gemini for a 5-question B1 quiz.
+//      - Ask Gemini for the full rewrite in the requested practice language
+//        (A1–C2 headlines + bodies + tappable-word picks + UI-language
+//        summary translations).
+//      - Ask Gemini for a 5-question B1 quiz in the requested practice language.
 //      - Write everything to Supabase.
 //   4. Update pipeline_status with the run summary.
 //
 // All secrets are server-side env vars. Run manually via:
-//   GET /api/cron/refresh?token=<CRON_TOKEN>
+//   GET /api/cron/refresh?token=<CRON_TOKEN>&lang=fr
+//   GET /api/cron/refresh?token=<CRON_TOKEN>&lang=all
 
 import { createClient } from '@supabase/supabase-js'
 import { XMLParser } from 'fast-xml-parser'
@@ -45,6 +47,23 @@ const FEEDS = [
 ]
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
+const DEFAULT_PRACTICE_LANG = 'es'
+const PRACTICE_LANGUAGES = {
+  es: { name: 'Spanish' },
+  fr: { name: 'French' },
+  de: { name: 'German' },
+  it: { name: 'Italian' },
+  ja: { name: 'Japanese' },
+  en: { name: 'English' },
+}
+const SUMMARY_TARGET_LANGUAGES = {
+  en: 'English',
+  he: 'Hebrew',
+  de: 'German',
+  fr: 'French',
+  it: 'Italian',
+  ja: 'Japanese',
+}
 
 export default async function handler(req, res) {
   // Vercel cron sends header `x-vercel-cron: 1`. Allow that, plus a token-based
@@ -53,8 +72,27 @@ export default async function handler(req, res) {
   const isManual = process.env.CRON_TOKEN && req.query.token === process.env.CRON_TOKEN
   if (!isCron && !isManual) return res.status(401).json({ error: 'Unauthorized' })
 
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY)
-  const stats = { feedsParsed: 0, articlesSeen: 0, articlesProcessed: 0, errors: [] }
+  let requestedLangs
+  try {
+    requestedLangs = parseRequestedLangs(req.query.lang || req.query.practiceLang)
+  } catch (e) {
+    return res.status(e.status || 400).json({ error: e.message })
+  }
+  const force = ['1', 'true', 'yes'].includes(String(req.query.force || '').toLowerCase())
+  const supabase = createClient(
+    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  )
+  const stats = {
+    langs: requestedLangs,
+    feedsParsed: 0,
+    articlesSeen: 0,
+    articlesProcessed: 0,
+    byLang: Object.fromEntries(
+      requestedLangs.map((lang) => [lang, { articlesProcessed: 0, articlesSkipped: 0, errors: [] }]),
+    ),
+    errors: [],
+  }
 
   // Fetch and parse all feeds.
   const grouped = {}
@@ -86,55 +124,104 @@ export default async function handler(req, res) {
     if (error) stats.errors.push({ stage: 'upsert articles', error: error.message })
   }
 
-  // For each article missing translations, generate them.
-  for (const article of all) {
-    try {
-      const { data: existing } = await supabase
-        .from('article_translations')
-        .select('article_id')
-        .eq('article_id', article.id)
-        .limit(1)
-      if (existing?.length) continue
+  // For each article missing translations in the requested practice language,
+  // generate the content pack for that language.
+  for (const lang of requestedLangs) {
+    for (const article of all) {
+      try {
+        const { data: existing, error: existingError } = await supabase
+          .from('article_translations')
+          .select('level')
+          .eq('article_id', article.id)
+          .eq('lang', lang)
+        if (existingError) throw existingError
 
-      const generated = await rewriteWithGemini(article)
-      const quiz = await generateQuiz(article, generated.B1)
+        const existingLevels = new Set((existing || []).map((row) => row.level))
+        const hasAllLevels = LEVELS.every((level) => existingLevels.has(level))
+        if (!force && hasAllLevels) {
+          stats.byLang[lang].articlesSkipped++
+          continue
+        }
 
-      const transRows = LEVELS.map((level) => ({
-        article_id: article.id,
-        level,
-        headline: generated[level].headline,
-        summary: generated.summary,
-        body: generated[level].body,
-      }))
-      const sumRows = Object.entries(generated.summaryTranslations || {}).map(([lang, text]) => ({
-        article_id: article.id,
-        lang,
-        text,
-      }))
+        const generated = await rewriteWithGemini(article, lang)
+        const quiz = await generateQuiz(article, generated.B1, lang)
 
-      await supabase.from('article_translations').upsert(transRows, { onConflict: 'article_id,level' })
-      if (sumRows.length) {
-        await supabase.from('summary_translations').upsert(sumRows, { onConflict: 'article_id,lang' })
+        const transRows = LEVELS.map((level) => ({
+          article_id: article.id,
+          lang,
+          level,
+          headline: generated[level].headline,
+          summary: generated.summary,
+          body: generated[level].body,
+        }))
+        const sumRows = Object.entries(generated.summaryTranslations || {}).map(([targetLang, text]) => ({
+          article_id: article.id,
+          lang,
+          target_lang: targetLang,
+          text,
+        }))
+
+        const { error: transError } = await supabase
+          .from('article_translations')
+          .upsert(transRows, { onConflict: 'article_id,lang,level' })
+        if (transError) throw transError
+
+        if (sumRows.length) {
+          const { error: sumError } = await supabase
+            .from('summary_translations')
+            .upsert(sumRows, { onConflict: 'article_id,lang,target_lang' })
+          if (sumError) throw sumError
+        }
+        if (quiz?.length) {
+          const { error: quizError } = await supabase
+            .from('quizzes')
+            .upsert(
+              { article_id: article.id, lang, level: 'B1', questions: quiz },
+              { onConflict: 'article_id,lang,level' },
+            )
+          if (quizError) throw quizError
+        }
+
+        stats.byLang[lang].articlesProcessed++
+        stats.articlesProcessed++
+      } catch (e) {
+        const error = { stage: 'generate', lang, article: article.id, error: e.message }
+        stats.byLang[lang].errors.push(error)
+        stats.errors.push(error)
       }
-      if (quiz?.length) {
-        await supabase.from('quizzes').upsert({ article_id: article.id, level: 'B1', questions: quiz })
-      }
-
-      stats.articlesProcessed++
-    } catch (e) {
-      stats.errors.push({ stage: 'generate', article: article.id, error: e.message })
     }
   }
 
-  await supabase.from('pipeline_status').upsert({
-    id: 1,
-    last_run_at: new Date().toISOString(),
-    articles_fetched: stats.articlesSeen,
-    articles_processed: stats.articlesProcessed,
-    errors: stats.errors.length ? stats.errors : null,
+  const feedErrors = stats.errors.filter((error) => error.stage === 'rss' || error.stage === 'upsert articles')
+  const statusRows = requestedLangs.map((lang) => {
+    const errors = [...feedErrors, ...stats.byLang[lang].errors]
+    return {
+      id: 1,
+      lang,
+      last_run_at: new Date().toISOString(),
+      articles_fetched: stats.articlesSeen,
+      articles_processed: stats.byLang[lang].articlesProcessed,
+      errors: errors.length ? errors : null,
+    }
   })
+  await supabase.from('pipeline_status').upsert(statusRows, { onConflict: 'id,lang' })
 
   res.status(200).json(stats)
+}
+
+function parseRequestedLangs(raw) {
+  const value = String(raw || DEFAULT_PRACTICE_LANG).toLowerCase().trim()
+  if (value === 'all') return Object.keys(PRACTICE_LANGUAGES)
+
+  const langs = [...new Set(value.split(',').map((x) => x.trim()).filter(Boolean))]
+  const invalid = langs.filter((lang) => !PRACTICE_LANGUAGES[lang])
+  if (invalid.length) {
+    const allowed = Object.keys(PRACTICE_LANGUAGES).join('|')
+    const err = new Error(`Unsupported lang "${invalid.join(',')}". Use ${allowed}, or all.`)
+    err.status = 400
+    throw err
+  }
+  return langs.length ? langs : [DEFAULT_PRACTICE_LANG]
 }
 
 // ─── RSS ─────────────────────────────────────────────────────────────
@@ -186,29 +273,32 @@ function stripHtml(s) {
 
 // ─── Gemini ──────────────────────────────────────────────────────────
 
-async function rewriteWithGemini(article) {
-  const prompt = `You are rewriting a news item as Spanish learning material for the app Nivelo.
+async function rewriteWithGemini(article, practiceLang) {
+  const practice = PRACTICE_LANGUAGES[practiceLang]
+  const targetList = Object.entries(SUMMARY_TARGET_LANGUAGES)
+    .map(([code, name]) => `"${code}" (${name})`)
+    .join(', ')
+  const prompt = `You are rewriting a news item as ${practice.name} learning material for the app Nivelo.
 
 Original article (in ${article.source_lang}):
 TITLE: ${article.raw_title}
 DESCRIPTION: ${article.raw_description}
 
-Produce a JSON response with the following fields, all in Spanish where indicated:
+Produce a JSON response with the following fields, all in ${practice.name} where indicated:
 
-- "summary": ONE Spanish sentence (≈ 12 words) that summarises the story for a news card.
-- "summaryTranslations": object with the Spanish summary translated into each of:
-    "en" (English), "he" (Hebrew), "de" (German), "fr" (French), "it" (Italian), "ja" (Japanese).
+- "summary": ONE ${practice.name} sentence (≈ 12 words) that summarises the story for a news card.
+- "summaryTranslations": object with the ${practice.name} summary translated into each of: ${targetList}.
 - For each of "A1","A2","B1","B2","C1","C2":
-    "headline": Spanish headline tuned to the level. Simpler/shorter for A1, longer & more sophisticated for C2.
-    "body": Spanish body text tuned to the level:
+    "headline": ${practice.name} headline tuned to the level. Simpler/shorter for A1, longer & more sophisticated for C2.
+    "body": ${practice.name} body text tuned to the level:
         A1: 4-5 short present-tense sentences with very basic vocabulary.
         A2: 5-6 simple sentences with simple past.
         B1: one solid paragraph (4-5 sentences), mixed tenses.
         B2: 1-2 paragraphs, richer vocabulary, more complex sentences.
         C1: 2 paragraphs, sophisticated vocabulary.
         C2: 2-3 paragraphs, literary register.
-    "words": array of 2-4 Spanish words from the body that are good vocabulary candidates
-            for word-tap translation (lowercase, no punctuation).
+    "words": array of 2-4 ${practice.name} words or short terms from the body that are good
+            vocabulary candidates for word-tap translation (no punctuation).
 
 Output STRICT JSON only, no markdown fences, no explanation.`
 
@@ -226,11 +316,14 @@ Output STRICT JSON only, no markdown fences, no explanation.`
   return result
 }
 
-async function generateQuiz(article, b1) {
+async function generateQuiz(article, b1, practiceLang) {
+  const practice = PRACTICE_LANGUAGES[practiceLang]
   const bodyText = b1.body.map((p) => p.map((s) => s.text).join('')).join('\n\n')
-  const prompt = `Build a 5-question Spanish quiz on this article. Mix Vocabulario, Comprensión, Gramática.
+  const prompt = `Build a 5-question ${practice.name} quiz on this article. Mix Vocabulario, Comprensión, Gramática.
 Return STRICT JSON ARRAY only:
 [{"type":"Vocabulario","question":"...","options":["a","b","c","d"],"correctIndex":0}, ...]
+Use only these exact "type" values: "Vocabulario", "Comprensión", "Gramática".
+Write question text and answer options in ${practice.name}.
 
 ARTICLE HEADLINE: ${b1.headline}
 ARTICLE BODY:
