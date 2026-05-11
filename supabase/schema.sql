@@ -94,6 +94,7 @@ begin
     update summary_translations set target_lang = lang, lang = 'es';
   end if;
 end $$;
+alter table summary_translations drop constraint if exists summary_translations_pkey;
 update summary_translations set target_lang = lang where target_lang is null;
 update summary_translations set lang = 'es' where lang is null;
 alter table summary_translations alter column lang set default 'es';
@@ -107,7 +108,6 @@ alter table summary_translations drop constraint if exists summary_translations_
 alter table summary_translations
   add constraint summary_translations_target_lang_check
   check (target_lang in ('en','he','de','fr','it','ja'));
-alter table summary_translations drop constraint if exists summary_translations_pkey;
 alter table summary_translations
   add constraint summary_translations_pkey
   primary key (article_id, lang, target_lang);
