@@ -113,6 +113,30 @@ export function getArticleQuiz(article, practiceLang = 'es') {
   return null
 }
 
+export function mergeArticleTranslation(article, payload) {
+  if (!article || !payload?.lang) return article
+  const byLang = cloneByLang(article.byLang || {})
+  const pack = (byLang[payload.lang] ||= { byLevel: {}, summary: '', summaryTranslations: {} })
+
+  for (const t of payload.article_translations || []) {
+    pack.byLevel[t.level] = { headline: t.headline, body: t.body || [] }
+    if (!pack.summary && t.summary) pack.summary = t.summary
+  }
+  for (const s of payload.summary_translations || []) {
+    pack.summaryTranslations[s.target_lang || s.lang] = s.text
+  }
+  for (const q of payload.quizzes || []) {
+    pack.quiz = q.questions
+  }
+
+  return {
+    ...article,
+    byLang,
+    articleLang: article.articleLang || payload.lang,
+    summary: article.summary || pack.summary,
+  }
+}
+
 // Decorate seed articles with `articleLang: 'es'` so callers can ask "is
 // content in MY language available?" uniformly across seed + supabase.
 function prepareSeed(list) {
@@ -173,4 +197,17 @@ function toClientShape(row) {
 
 function countryFlag(c) {
   return ({ IL: '🇮🇱', ES: '🇪🇸', US: '🇺🇸', GLOBAL: '🌐', IT: '🇮🇹', FR: '🇫🇷', JP: '🇯🇵' }[c]) || '🌍'
+}
+
+function cloneByLang(byLang) {
+  return Object.fromEntries(
+    Object.entries(byLang).map(([lang, pack]) => [
+      lang,
+      {
+        ...pack,
+        byLevel: { ...(pack.byLevel || {}) },
+        summaryTranslations: { ...(pack.summaryTranslations || {}) },
+      },
+    ]),
+  )
 }

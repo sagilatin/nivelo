@@ -2,13 +2,16 @@ import { Link } from 'react-router-dom'
 import { ArrowRight, ExternalLink, Loader2 } from 'lucide-react'
 import { useApp } from '../context/AppContext.jsx'
 import { getArticleContent, getArticleSummary } from '../data/useArticles.js'
+import { useEnsureTranslation } from '../data/useEnsureTranslation.js'
 import { useT } from '../i18n/useT.js'
 
-export default function NewsCard({ article }) {
+export default function NewsCard({ article, requestTranslation = false }) {
   const { level, targetLang } = useApp()
   const t = useT()
-  const content = getArticleContent(article, level, targetLang)
-  const summary = getArticleSummary(article, targetLang)
+  const needsTranslation = !getArticleContent(article, level, targetLang)
+  const { article: preparedArticle } = useEnsureTranslation(article, targetLang, requestTranslation && needsTranslation)
+  const content = getArticleContent(preparedArticle, level, targetLang)
+  const summary = getArticleSummary(preparedArticle, targetLang)
   const unavailable = !content
 
   return (

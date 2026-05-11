@@ -11,6 +11,7 @@ import {
   getArticleContent,
   getArticleQuiz,
 } from '../data/useArticles.js'
+import { useEnsureTranslation } from '../data/useEnsureTranslation.js'
 import { useApp } from '../context/AppContext.jsx'
 import { useT } from '../i18n/useT.js'
 
@@ -43,9 +44,11 @@ export default function ArticleScreen() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { articles } = useArticles()
-  const article = findArticleById(articles, id)
+  const rawArticle = findArticleById(articles, id)
   const t = useT()
   const { vocabulary, addWord, removeWord, level, targetLang } = useApp()
+  const needsTranslation = !getArticleContent(rawArticle, level, targetLang)
+  const { article } = useEnsureTranslation(rawArticle, targetLang, needsTranslation)
   const content = getArticleContent(article, level, targetLang)
   const quiz = getArticleQuiz(article, targetLang)
   const unavailable = !content

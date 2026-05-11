@@ -31,6 +31,10 @@ export default function HomeScreen() {
   }, [sources, articles])
 
   const groups = useMemo(() => groupByDate(filtered), [filtered])
+  const requestableIds = useMemo(
+    () => new Set(filtered.slice(0, 4).map((article) => article.id)),
+    [filtered],
+  )
 
   return (
     <div className="min-h-screen pb-28">
@@ -64,7 +68,7 @@ export default function HomeScreen() {
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {g.items.map((a) => (
-                    <NewsCard key={a.id} article={a} />
+                    <NewsCard key={a.id} article={a} requestTranslation={requestableIds.has(a.id)} />
                   ))}
                 </div>
               </div>
