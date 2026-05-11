@@ -17,7 +17,16 @@ const VALID_TARGETS = new Set(['en', 'he', 'de', 'fr', 'it', 'ja'])
 const VALID_SOURCES = new Set(['es', 'fr', 'de', 'it', 'ja', 'en'])
 const DEEPL_SOURCE_MAP = { es: 'ES', fr: 'FR', de: 'DE', it: 'IT', ja: 'JA', en: 'EN' }
 const LANG_NAME = { es: 'Spanish', fr: 'French', de: 'German', it: 'Italian', ja: 'Japanese', en: 'English', he: 'Hebrew' }
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'
+const DEFAULT_GEMINI_MODELS = [
+  'gemini-2.5-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-flash-lite-latest',
+  'gemini-flash-latest',
+]
+const GEMINI_MODELS = (process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODELS.join(','))
+  .split(',')
+  .map((model) => model.trim())
+  .filter(Boolean)
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate')
@@ -109,15 +118,22 @@ async function geminiTranslateOne(text, source, lang) {
   const srcName = LANG_NAME[source] || source
   const tgtName = LANG_NAME[lang] || lang
   const prompt = `Translate the ${srcName} word "${text}" into ${tgtName}. Return ONLY the single translated word, no quotes or commentary.`
-  const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-    {
+  const errors = []
+
+  for (const model of GEMINI_MODELS) {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-    },
-  )
-  if (!r.ok) throw new Error(`Gemini ${r.status}`)
-  const data = await r.json()
-  return (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim()
+    })
+    if (!r.ok) {
+      errors.push(`${model} ${r.status}`)
+      if (![429, 500, 502, 503, 504].includes(r.status)) break
+      continue
+    }
+    const data = await r.json()
+    return (data.candidates?.[0]?.content?.parts?.[0]?.text || '').trim()
+  }
+
+  throw new Error(`Gemini failed across models: ${errors.join(' | ')}`)
 }
