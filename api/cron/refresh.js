@@ -127,7 +127,9 @@ export default async function handler(req, res) {
     grouped[country].sort((a, b) => (b.pub_date || '').localeCompare(a.pub_date || ''))
     grouped[country] = grouped[country].slice(0, 5)
   }
-  const all = Object.values(grouped).flat()
+  const all = Object.values(grouped)
+    .flat()
+    .sort((a, b) => (b.pub_date || '').localeCompare(a.pub_date || ''))
   stats.articlesSeen = all.length
 
   // Insert articles (idempotent: id = hash of source URL).
@@ -358,8 +360,13 @@ Write question text and answer options in ${practice.name}.
 ARTICLE HEADLINE: ${b1.headline}
 ARTICLE BODY:
 ${bodyText}`
-  const data = await callGemini(prompt, true)
-  return Array.isArray(data) ? data : []
+  try {
+    const data = await callGemini(prompt, true)
+    return Array.isArray(data) ? data : []
+  } catch (e) {
+    console.warn(`Quiz generation failed for ${article.id}: ${e.message}`)
+    return []
+  }
 }
 
 async function callGemini(prompt, json) {
