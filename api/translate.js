@@ -17,7 +17,7 @@ const VALID_TARGETS = new Set(['en', 'he', 'de', 'fr', 'it', 'ja'])
 const VALID_SOURCES = new Set(['es', 'fr', 'de', 'it', 'ja', 'en'])
 const DEEPL_SOURCE_MAP = { es: 'ES', fr: 'FR', de: 'DE', it: 'IT', ja: 'JA', en: 'EN' }
 const LANG_NAME = { es: 'Spanish', fr: 'French', de: 'German', it: 'Italian', ja: 'Japanese', en: 'English', he: 'Hebrew' }
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate')

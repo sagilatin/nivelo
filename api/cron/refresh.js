@@ -64,7 +64,7 @@ const SUMMARY_TARGET_LANGUAGES = {
   it: 'Italian',
   ja: 'Japanese',
 }
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite'
 
 export default async function handler(req, res) {
   // Vercel cron sends header `x-vercel-cron: 1`. Allow that, plus a token-based
