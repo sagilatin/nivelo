@@ -64,6 +64,7 @@ const SUMMARY_TARGET_LANGUAGES = {
   it: 'Italian',
   ja: 'Japanese',
 }
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
 
 export default async function handler(req, res) {
   // Vercel cron sends header `x-vercel-cron: 1`. Allow that, plus a token-based
@@ -333,7 +334,7 @@ ${bodyText}`
 }
 
 async function callGemini(prompt, json) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`
   const r = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

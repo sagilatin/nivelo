@@ -17,6 +17,7 @@ const VALID_TARGETS = new Set(['en', 'he', 'de', 'fr', 'it', 'ja'])
 const VALID_SOURCES = new Set(['es', 'fr', 'de', 'it', 'ja', 'en'])
 const DEEPL_SOURCE_MAP = { es: 'ES', fr: 'FR', de: 'DE', it: 'IT', ja: 'JA', en: 'EN' }
 const LANG_NAME = { es: 'Spanish', fr: 'French', de: 'German', it: 'Italian', ja: 'Japanese', en: 'English', he: 'Hebrew' }
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate')
@@ -109,7 +110,7 @@ async function geminiTranslateOne(text, source, lang) {
   const tgtName = LANG_NAME[lang] || lang
   const prompt = `Translate the ${srcName} word "${text}" into ${tgtName}. Return ONLY the single translated word, no quotes or commentary.`
   const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
