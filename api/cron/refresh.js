@@ -48,6 +48,7 @@ const FEEDS = [
 
 const LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
 const DEFAULT_PRACTICE_LANG = 'es'
+const DEFAULT_ARTICLE_LIMIT = 6
 const PRACTICE_LANGUAGES = {
   es: { name: 'Spanish' },
   fr: { name: 'French' },
@@ -83,8 +84,10 @@ export default async function handler(req, res) {
   if (!isCron && !isManual) return res.status(401).json({ error: 'Unauthorized' })
 
   let requestedLangs
+  let articleLimit
   try {
     requestedLangs = parseRequestedLangs(req.query.lang || req.query.practiceLang)
+    articleLimit = parseArticleLimit(req.query.limit || req.query.maxArticles || req.query.batch)
   } catch (e) {
     return res.status(e.status || 400).json({ error: e.message })
   }
@@ -95,6 +98,7 @@ export default async function handler(req, res) {
   )
   const stats = {
     langs: requestedLangs,
+    articleLimit: Number.isFinite(articleLimit) ? articleLimit : 'all',
     feedsParsed: 0,
     articlesSeen: 0,
     articlesProcessed: 0,
@@ -138,6 +142,8 @@ export default async function handler(req, res) {
   // generate the content pack for that language.
   for (const lang of requestedLangs) {
     for (const article of all) {
+      if (stats.byLang[lang].articlesProcessed >= articleLimit) break
+
       try {
         const { data: existing, error: existingError } = await supabase
           .from('article_translations')
@@ -232,6 +238,20 @@ function parseRequestedLangs(raw) {
     throw err
   }
   return langs.length ? langs : [DEFAULT_PRACTICE_LANG]
+}
+
+function parseArticleLimit(raw) {
+  const value = String(raw || '').toLowerCase().trim()
+  if (!value) return DEFAULT_ARTICLE_LIMIT
+  if (['all', 'none', 'unlimited'].includes(value)) return Number.POSITIVE_INFINITY
+
+  const limit = Number.parseInt(value, 10)
+  if (!Number.isFinite(limit) || limit < 1) {
+    const err = new Error('Unsupported limit. Use a positive integer, or all.')
+    err.status = 400
+    throw err
+  }
+  return limit
 }
 
 // ─── RSS ─────────────────────────────────────────────────────────────
